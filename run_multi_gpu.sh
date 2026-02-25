@@ -23,7 +23,7 @@
 
 # ========== 配置区（根据你的环境修改）==========
 
-GPU_IDS=(1)           # 要使用的 GPU ID 列表，多卡示例：(0 1 2 3)
+GPU_IDS=(0)           # 要使用的 GPU ID 列表，多卡示例：(0 1 2 3)
 PROCS_PER_GPU=4       # 每个 GPU 上启动的进程数（每个进程有独立的并行环境池）
 NUM_ENVS=64           # 每个进程内的并行环境数量
 EXTRA_ARGS=""         # 传给 train_ppo.py 的额外参数，如 "--sync --max_train_steps 100000"
