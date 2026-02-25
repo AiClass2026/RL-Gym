@@ -183,6 +183,8 @@ def train():
             if max_train_steps is not None and agent.step_idx >= max_train_steps:
                 break
 
+            agent.update_old_policy()
+
             states, taken_actions, values, rewards, dones = [], [], [], [], []
 
             for _ in range(args.horizon):
@@ -233,7 +235,6 @@ def train():
             advantages_flat = advantages.flatten()
 
             # PPO update
-            agent.update_old_policy()
             for _ in range(args.num_epochs):
                 indices = np.arange(T * N)
                 np.random.shuffle(indices)
