@@ -15,7 +15,8 @@ TensorBoard 日志文本打印工具
     使用多进程并行解析多个实验目录。
 
 用法：
-    python print_tb_logs.py
+    python print_tb_logs.py [ROOT_DIR]
+    python print_tb_logs.py /path/to/runs --max-points 100
 """
 
 import os
@@ -23,15 +24,16 @@ import sys
 import glob
 import struct
 import time
+import argparse
 from collections import defaultdict
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
 from tensorboard.compat.proto.event_pb2 import Event
 
-# runs/ 目录路径（与本脚本同级）
-RUNS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "runs")
-# 每个标量标签最多显示的数据点数（超过则均匀采样）
-MAX_POINTS = 50
+# 默认值
+DEFAULT_RUNS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "runs")
+DEFAULT_MAX_POINTS = 50
+MAX_POINTS = DEFAULT_MAX_POINTS
 
 
 def read_tfrecord(path):
@@ -76,13 +78,8 @@ def parse_experiment(exp_dir):
     """
     exp_name = os.path.basename(exp_dir)
 
-    # 事件文件通常在 logs/ 子目录中
-    log_dir = os.path.join(exp_dir, "logs")
-    if not os.path.isdir(log_dir):
-        log_dir = exp_dir
-
-    # 查找所有 TensorBoard 事件文件
-    event_files = sorted(glob.glob(os.path.join(log_dir, "events.out.tfevents.*")))
+    # 递归查找所有 TensorBoard 事件文件
+    event_files = sorted(glob.glob(os.path.join(exp_dir, "**", "events.out.tfevents.*"), recursive=True))
     if not event_files:
         return exp_name, {}
 
@@ -162,20 +159,75 @@ def print_experiment(exp_name, tag_data):
             print(f"  {step:>10d}  {fmt(val):>14s}")
 
 
+def find_experiment_dirs(root_dir):
+    """
+    递归扫描根目录，找出所有包含 TensorBoard 事件文件的目录。
+
+    从 root_dir 开始向下搜索，将包含事件文件的最浅层目录视为一个实验。
+
+    Args:
+        root_dir: 扫描的根目录
+
+    Returns:
+        排序后的实验目录列表
+    """
+    event_files = glob.glob(os.path.join(root_dir, "**", "events.out.tfevents.*"), recursive=True)
+    if not event_files:
+        return []
+
+    # 收集所有事件文件所在的目录，然后找到相对于 root_dir 的最顶层实验目录
+    exp_dirs = set()
+    for ef in event_files:
+        rel = os.path.relpath(os.path.dirname(ef), root_dir)
+        top_level = rel.split(os.sep)[0] if rel != "." else "."
+        if top_level == ".":
+            exp_dirs.add(root_dir)
+        else:
+            exp_dirs.add(os.path.join(root_dir, top_level))
+
+    return sorted(exp_dirs)
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="在命令行中打印 TensorBoard 标量日志数据",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument(
+        "root_dir",
+        nargs="?",
+        default=DEFAULT_RUNS_DIR,
+        help=f"日志文件的根目录，递归扫描其下的事件文件（默认: runs/）",
+    )
+    parser.add_argument(
+        "--max-points", "-n",
+        type=int,
+        default=DEFAULT_MAX_POINTS,
+        help=f"每个标量标签最多显示的数据点数（默认: {DEFAULT_MAX_POINTS}）",
+    )
+    return parser.parse_args()
+
+
 def main():
     """
-    主函数：扫描 runs/ 目录下所有实验，并行解析后打印结果。
+    主函数：扫描指定根目录下所有实验，并行解析后打印结果。
     """
-    if not os.path.isdir(RUNS_DIR):
-        print(f"错误: 未找到 runs 目录: {RUNS_DIR}", file=sys.stderr)
+    args = parse_args()
+    root_dir = os.path.abspath(args.root_dir)
+    global MAX_POINTS
+    MAX_POINTS = args.max_points
+
+    if not os.path.isdir(root_dir):
+        print(f"错误: 目录不存在: {root_dir}", file=sys.stderr)
         sys.exit(1)
 
-    # 收集所有实验目录
-    exp_dirs = sorted(d for d in glob.glob(os.path.join(RUNS_DIR, "*")) if os.path.isdir(d))
+    # 递归扫描实验目录
+    exp_dirs = find_experiment_dirs(root_dir)
     if not exp_dirs:
-        print("runs/ 目录下没有找到实验。")
+        print(f"在 {root_dir} 下未找到任何 TensorBoard 事件文件。")
         return
 
+    print(f"扫描目录: {root_dir}")
     print(f"共 {len(exp_dirs)} 个实验，每字段最多 {MAX_POINTS} 个采样点。正在并行解析...",
           flush=True)
 
