@@ -38,6 +38,8 @@ def parse_args():
     parser.add_argument("--sync", action="store_true", help="使用 SyncVectorEnv 替代 Async（调试用）")
     parser.add_argument("--eval_max_steps", type=int, default=None, help="每次评估的最大环境步数（默认不限制）")
     parser.add_argument("--max_train_steps", type=int, default=280000, help="最大训练步数，达到后自动停止")
+    parser.add_argument("--device", type=str, default=None, help="设备，如 cuda:0 / cuda / cpu；默认自动选 cuda")
+    parser.add_argument("--run_id", type=str, default=None, help="运行唯一标识，多进程时避免目录冲突；默认用 PID")
     return parser.parse_args()
 
 
@@ -127,9 +129,10 @@ def train():
     action_max = np.array(action_space.high, dtype=np.float32)
     test_env.close()
 
-    # 创建以时间戳为前缀的 run 目录
+    # 创建以时间戳为前缀的 run 目录，多进程时用 run_id 区分
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    run_dir = os.path.join("./runs", f"{timestamp}_{args.model_name}")
+    run_id = args.run_id if args.run_id is not None else str(os.getpid())
+    run_dir = os.path.join("./runs", f"{timestamp}_{run_id}_{args.model_name}")
     print(f"[INFO] Run directory: {run_dir}")
 
     # 创建 agent
@@ -142,6 +145,7 @@ def train():
         value_scale=args.value_scale,
         entropy_scale=args.entropy_scale,
         run_dir=run_dir,
+        device=args.device,
     )
 
     # 创建并行环境 (AsyncVectorEnv 或 SyncVectorEnv)

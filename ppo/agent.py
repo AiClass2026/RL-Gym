@@ -85,6 +85,7 @@ class PPOAgent:
         value_scale=0.5,
         entropy_scale=0.01,
         run_dir="./runs/default",
+        device=None,
     ):
         self.epsilon = epsilon
         self.value_scale = value_scale
@@ -99,7 +100,9 @@ class PPOAgent:
         for d in [self.ckpt_dir, self.log_dir, self.video_dir]:
             os.makedirs(d, exist_ok=True)
 
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        if device is None:
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.device = torch.device(device)
         self.policy = ActorCritic(input_shape, num_actions, action_min, action_max).to(self.device)
         self.policy_old = ActorCritic(input_shape, num_actions, action_min, action_max).to(self.device)
         self.policy_old.load_state_dict(self.policy.state_dict())
