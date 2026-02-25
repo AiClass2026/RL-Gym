@@ -1,5 +1,7 @@
 runs/
 logs/
+eval_videos/
+
 .cursor/
 .vscode/
 
