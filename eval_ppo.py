@@ -16,6 +16,7 @@ CarRacing-v3 PPO 评估脚本
 
 import argparse
 import os
+from datetime import datetime
 
 import gymnasium as gym
 import numpy as np
@@ -110,7 +111,7 @@ def run_episode(policy, device, mode, seed, max_steps, video_dir, episode_idx):
         state_tensor = torch.from_numpy(np.array([state])).float().to(device)
 
         action, _ = select_action(policy, state_tensor, mode, device)
-        obs, reward, terminated, truncated, _ = env.step(action)
+        obs, reward, terminated, truncated, info = env.step(action)
 
         total_reward += float(reward)
         step_count += 1
@@ -121,8 +122,9 @@ def run_episode(policy, device, mode, seed, max_steps, video_dir, episode_idx):
         if max_steps is not None and step_count >= max_steps:
             break
 
+    success = terminated
     env.close()
-    return total_reward, step_count
+    return total_reward, step_count, success
 
 
 def main():
@@ -136,24 +138,30 @@ def main():
     policy = load_policy(args.ckpt, device)
 
     ckpt_name = os.path.splitext(os.path.basename(args.ckpt))[0]
-    video_dir = os.path.join("eval_videos", ckpt_name)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    video_dir = os.path.join("eval_videos", f"{timestamp}_{ckpt_name}")
     print(f"[INFO] Videos: {video_dir}")
 
     rewards = []
     steps_list = []
+    successes = []
 
     for ep in range(args.num_episodes):
-        ep_reward, ep_steps = run_episode(
+        ep_reward, ep_steps, ep_success = run_episode(
             policy, device, args.mode, args.seed, args.max_steps,
             video_dir, ep,
         )
         rewards.append(ep_reward)
         steps_list.append(ep_steps)
-        print(f"  Episode {ep + 1}/{args.num_episodes}: reward = {ep_reward:.2f}, steps = {ep_steps}")
+        successes.append(ep_success)
+        status = "SUCCESS" if ep_success else "FAIL"
+        print(f"  Episode {ep + 1}/{args.num_episodes}: reward = {ep_reward:.2f}, steps = {ep_steps}, {status}")
 
     rewards = np.array(rewards)
+    success_rate = sum(successes) / len(successes)
     print("\n" + "=" * 50)
     print(f"Results ({args.num_episodes} episodes, mode={args.mode}):")
+    print(f"  Success rate: {sum(successes)}/{len(successes)} ({success_rate:.1%})")
     print(f"  Mean reward:  {rewards.mean():.2f}")
     print(f"  Std reward:   {rewards.std():.2f}")
     print(f"  Min reward:   {rewards.min():.2f}")
