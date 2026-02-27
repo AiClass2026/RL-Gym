@@ -52,3 +52,82 @@ RL-Gym/
 ### `run_multi_gpu.sh` — 多进程启动
 
 通过 tmux 在多个 GPU 上并行启动训练进程，每个进程独立运行 `train_ppo.py`。
+
+## 环境配置步骤
+
+### 1) 创建并进入 Conda 环境
+
+```bash
+conda create -n rl-gym python=3.10 -y
+conda activate rl-gym
+python -V
+```
+
+### 2) 安装依赖
+
+```bash
+pip install -U pip setuptools wheel
+pip install -r requirements.txt
+```
+
+### 3) 验证核心依赖是否可用
+
+```bash
+python -c "import torch, gymnasium; print('torch=', torch.__version__); print('gymnasium=', gymnasium.__version__)"
+```
+
+> 若使用 GPU，可额外检查：
+>
+> ```bash
+> python -c "import torch; print('cuda_available=', torch.cuda.is_available())"
+> ```
+
+## 训练、评测运行流程
+
+### 1) 启动训练
+
+最小示例（自动选择设备）：
+
+```bash
+python train_ppo.py
+```
+
+常用参数示例（显式指定 GPU、并行环境数和训练步数）：
+
+```bash
+python train_ppo.py \
+  --device cuda:0 \
+  --num_envs 32 \
+  --max_train_steps 100000 \
+  --eval_interval 2000 \
+  --save_interval 10000
+```
+
+训练输出目录说明：
+
+- `runs/<时间戳>_<运行ID>_<模型名>/ckpt/`：模型检查点（`.pt`）
+- `runs/<时间戳>_<运行ID>_<模型名>/logs/`：TensorBoard 日志
+- `runs/<时间戳>_<运行ID>_<模型名>/videos/`：训练期间评估视频
+
+### 2) 查看训练日志（可选）
+
+```bash
+tensorboard --logdir runs --port 6006
+```
+
+浏览器访问：`http://localhost:6006`
+
+### 3) 运行离线评测
+
+使用保存的 checkpoint 进行评测（采样策略）：
+
+```bash
+python eval_ppo.py \
+  --ckpt runs/<你的run目录>/ckpt/<checkpoint>.pt \
+  --mode sample \
+  --num_episodes 10 \
+```
+
+评测输出目录：
+
+- `eval_videos/<时间戳>_<checkpoint名>/`：每个 episode 的评测视频

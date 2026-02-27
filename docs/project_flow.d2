@@ -1,0 +1,359 @@
+# ============================================================
+# CarRacing-v3 PPO 项目流程图
+# ============================================================
+# 使用方法: 在 https://play.d2lang.com 中粘贴本文件内容即可查看
+# ============================================================
+
+direction: down
+
+# ---- 全局样式 ----
+style: {
+  fill: "#f8f9fa"
+}
+
+# ============================================================
+# 项目文件结构
+# ============================================================
+title: |md
+  # CarRacing-v3 PPO 训练项目流程图
+| {
+  shape: text
+  style: {
+    font-size: 28
+  }
+}
+
+# ============================================================
+# 1. 项目入口
+# ============================================================
+entry: "python train_ppo.py" {
+  shape: oval
+  style: {
+    fill: "#e8f5e9"
+    font-size: 18
+    bold: true
+  }
+}
+
+# ============================================================
+# 2. 初始化阶段
+# ============================================================
+init: 初始化阶段 {
+  style: {
+    fill: "#e3f2fd"
+    stroke: "#1565c0"
+    border-radius: 8
+  }
+
+  parse: "解析命令行参数\n(学习率、环境数量、训练步数等)" {
+    shape: rectangle
+    style: { fill: "#bbdefb" }
+  }
+
+  query_env: "查询动作空间信息\n动作维度=3 [转向, 油门, 刹车]\n范围: [-1,0,0] ~ [+1,1,1]" {
+    shape: rectangle
+    style: { fill: "#bbdefb" }
+  }
+
+  create_agent: "创建 PPOAgent\n(ActorCritic网络 + Adam优化器)" {
+    shape: rectangle
+    style: { fill: "#bbdefb" }
+  }
+
+  create_envs: "创建 64 个并行环境\n(AsyncVectorEnv, 多进程)" {
+    shape: rectangle
+    style: { fill: "#bbdefb" }
+  }
+
+  init_stack: "初始化 64 个帧堆叠器\n每个维护最近 4 帧" {
+    shape: rectangle
+    style: { fill: "#bbdefb" }
+  }
+
+  parse -> query_env -> create_agent -> create_envs -> init_stack
+}
+
+# ============================================================
+# 3. 训练主循环
+# ============================================================
+loop_check: "训练步数 < 最大步数？" {
+  shape: diamond
+  style: {
+    fill: "#fff9c4"
+    font-size: 16
+    bold: true
+  }
+}
+
+# ---- 阶段 A: Rollout ----
+rollout: "阶段 A: Rollout 数据采集" {
+  style: {
+    fill: "#fce4ec"
+    stroke: "#c62828"
+    border-radius: 8
+  }
+
+  desc: |md
+    在 **64 个并行环境**中各运行 **64 步**
+    共采集 64×64 = **4096 个样本**
+  | {
+    shape: text
+    style: { font-size: 14 }
+  }
+
+  get_state: "获取当前状态\n(84×84×4 堆叠帧)" {
+    shape: rectangle
+    style: { fill: "#f8bbd0" }
+  }
+
+  predict: "神经网络预测\n→ 采样动作 + 价值估计" {
+    shape: rectangle
+    style: { fill: "#f8bbd0" }
+  }
+
+  step: "环境执行动作\n→ 新观测 + 奖励 + 是否结束" {
+    shape: rectangle
+    style: { fill: "#f8bbd0" }
+  }
+
+  store: "保存数据\nstates, actions, rewards\nlog_probs, values, dones" {
+    shape: cylinder
+    style: { fill: "#f8bbd0" }
+  }
+
+  update_stack: "更新帧堆叠\n(episode结束时重置)" {
+    shape: rectangle
+    style: { fill: "#f8bbd0" }
+  }
+
+  horizon_check: "重复 64 步" {
+    shape: diamond
+    style: { fill: "#ffcdd2" }
+  }
+
+  desc -> get_state -> predict -> step -> store -> update_stack -> horizon_check
+  horizon_check -> get_state: "未满 64 步" {
+    style: { stroke: "#c62828"; stroke-dash: 3 }
+  }
+}
+
+# ---- 阶段 B: GAE 计算 ----
+gae: "阶段 B: GAE 优势估计" {
+  style: {
+    fill: "#e8eaf6"
+    stroke: "#283593"
+    border-radius: 8
+  }
+
+  bootstrap: "Bootstrap: 用 Critic 估计\n最后状态的未来价值 V(s_last)" {
+    shape: rectangle
+    style: { fill: "#c5cae9" }
+  }
+
+  calc_gae: "计算 GAE 优势\nA_t = δ_t + γλ·A_{t+1}\n(γ=0.99, λ=0.95)" {
+    shape: rectangle
+    style: { fill: "#c5cae9" }
+  }
+
+  calc_return: "计算回报\nreturns = advantages + values" {
+    shape: rectangle
+    style: { fill: "#c5cae9" }
+  }
+
+  normalize: "优势标准化\nA = (A - μ) / (σ + 1e-8)" {
+    shape: rectangle
+    style: { fill: "#c5cae9" }
+  }
+
+  bootstrap -> calc_gae -> calc_return -> normalize
+}
+
+# ---- 阶段 C: PPO 更新 ----
+ppo_update: "阶段 C: PPO 参数更新" {
+  style: {
+    fill: "#fff3e0"
+    stroke: "#e65100"
+    border-radius: 8
+  }
+
+  epoch_desc: |md
+    重复 **10 轮** (num_epochs)
+    每轮将 4096 个样本随机切分为 **32 个 mini-batch**
+    共 10×32 = **320 次梯度更新**
+  | {
+    shape: text
+    style: { font-size: 14 }
+  }
+
+  shuffle: "随机打乱样本顺序" {
+    shape: rectangle
+    style: { fill: "#ffe0b2" }
+  }
+
+  get_mb: "取一个 mini-batch\n(128 个样本)" {
+    shape: rectangle
+    style: { fill: "#ffe0b2" }
+  }
+
+  reeval: "用当前策略重新计算\nlog_prob_new, entropy, value" {
+    shape: rectangle
+    style: { fill: "#ffe0b2" }
+  }
+
+  ratio: "计算重要性采样比率\nr = exp(log_new - log_old)" {
+    shape: rectangle
+    style: { fill: "#ffe0b2" }
+  }
+
+  loss: "计算 PPO 损失\nL = L_policy + 0.5·L_value - 0.01·entropy" {
+    shape: hexagon
+    style: { fill: "#ffcc80"; bold: true }
+  }
+
+  backprop: "反向传播 + 梯度裁剪 + 参数更新" {
+    shape: rectangle
+    style: { fill: "#ffe0b2" }
+  }
+
+  epoch_desc -> shuffle -> get_mb -> reeval -> ratio -> loss -> backprop
+  backprop -> get_mb: "下一个 mini-batch" {
+    style: { stroke: "#e65100"; stroke-dash: 3 }
+  }
+}
+
+# ---- 定期操作 ----
+eval_save: 定期操作 {
+  style: {
+    fill: "#e0f2f1"
+    stroke: "#00695c"
+    border-radius: 8
+  }
+
+  eval: "每 2000 步: 评估\n运行一个完整 episode\n录制视频 + 计算奖励" {
+    shape: rectangle
+    style: { fill: "#b2dfdb" }
+  }
+
+  save: "每 10000 步: 保存检查点\n网络权重 + 优化器状态" {
+    shape: rectangle
+    style: { fill: "#b2dfdb" }
+  }
+}
+
+# ---- 训练结束 ----
+done: "训练完成 ✓\n保存最终模型" {
+  shape: oval
+  style: {
+    fill: "#c8e6c9"
+    font-size: 16
+    bold: true
+  }
+}
+
+# ============================================================
+# 连接线
+# ============================================================
+entry -> init
+
+init -> loop_check
+
+loop_check -> rollout: "是" {
+  style: { stroke: "#2e7d32"; bold: true }
+}
+
+rollout -> gae
+
+gae -> ppo_update
+
+ppo_update -> eval_save
+
+eval_save -> loop_check: "继续训练" {
+  style: { stroke: "#1565c0"; stroke-dash: 5 }
+}
+
+loop_check -> done: "否 (达到最大步数)" {
+  style: { stroke: "#c62828"; bold: true }
+}
+
+# ============================================================
+# 神经网络架构（侧边说明）
+# ============================================================
+nn: "ActorCritic 网络架构" {
+  style: {
+    fill: "#f3e5f5"
+    stroke: "#6a1b9a"
+    border-radius: 8
+  }
+
+  input: "输入: 状态 (84×84×4)\n4帧灰度图像堆叠" {
+    shape: rectangle
+    style: { fill: "#e1bee7" }
+  }
+
+  conv1: "Conv2d(4→16, 8×8, stride=4)\n84×84 → 20×20" {
+    shape: rectangle
+    style: { fill: "#ce93d8" }
+  }
+
+  conv2: "Conv2d(16→32, 3×3, stride=2)\n20×20 → 9×9" {
+    shape: rectangle
+    style: { fill: "#ce93d8" }
+  }
+
+  fc: "全连接层 FC(2592→256)" {
+    shape: rectangle
+    style: { fill: "#ce93d8" }
+  }
+
+  actor: "Actor (策略头)\n输出: 动作均值 μ(3维)\n+ 可学习标准差 σ(3维)\n→ 高斯分布 N(μ,σ)" {
+    shape: rectangle
+    style: { fill: "#f48fb1" }
+  }
+
+  critic: "Critic (价值头)\n输出: 状态价值 V(s)\n一个标量" {
+    shape: rectangle
+    style: { fill: "#90caf9" }
+  }
+
+  input -> conv1 -> conv2 -> fc
+  fc -> actor
+  fc -> critic
+}
+
+# ============================================================
+# 数据预处理流水线（侧边说明）
+# ============================================================
+preprocess: "图像预处理流水线" {
+  style: {
+    fill: "#efebe9"
+    stroke: "#4e342e"
+    border-radius: 8
+  }
+
+  raw: "环境原始输出\n96×96×3 RGB 图像" {
+    shape: rectangle
+    style: { fill: "#d7ccc8" }
+  }
+
+  crop: "裁剪\n去掉底部仪表盘+左右边框\n→ 84×84×3" {
+    shape: rectangle
+    style: { fill: "#d7ccc8" }
+  }
+
+  gray: "灰度化\n0.299R + 0.587G + 0.114B\n→ 84×84" {
+    shape: rectangle
+    style: { fill: "#d7ccc8" }
+  }
+
+  norm: "归一化\n[0,255] → [-1,1]" {
+    shape: rectangle
+    style: { fill: "#d7ccc8" }
+  }
+
+  stack: "帧堆叠\n最近4帧沿通道轴堆叠\n→ 84×84×4" {
+    shape: rectangle
+    style: { fill: "#d7ccc8" }
+  }
+
+  raw -> crop -> gray -> norm -> stack
+}
