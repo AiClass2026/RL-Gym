@@ -23,17 +23,14 @@
 
 # ========== 配置区（根据你的环境修改）==========
 
-GPU_IDS=(0)           # 要使用的 GPU ID 列表，多卡示例：(0 1 2 3)
+GPU_IDS=(0 1)           # 要使用的 GPU ID 列表，多卡示例：(0 1 2 3)
 PROCS_PER_GPU=4       # 每个 GPU 上启动的进程数（每个进程有独立的并行环境池）
-NUM_ENVS=64           # 每个进程内的并行环境数量
 EXTRA_ARGS=""         # 传给 train_ppo.py 的额外参数，如 "--sync --max_train_steps 100000"
-CONDA_ENV="rl_gym"   # Conda 虚拟环境名称
+CONDA_ENV="rl-gym"   # Conda 虚拟环境名称
 CONDA_SH="/root/miniforge3/etc/profile.d/conda.sh"  # conda 初始化脚本路径
 
 # PyTorch pip 包自带的 NVIDIA 库路径（优先于系统旧版 cuDNN）
-# 这解决了系统 cuDNN 版本与 PyTorch 不匹配的问题
-SITE_PKG="/root/miniforge3/envs/${CONDA_ENV}/lib/python3.11/site-packages"
-NVIDIA_LIB="${SITE_PKG}/nvidia/cudnn/lib:${SITE_PKG}/nvidia/cublas/lib:${SITE_PKG}/nvidia/cuda_runtime/lib:${SITE_PKG}/nvidia/nvjitlink/lib"
+# 在 tmux 会话激活 conda 后动态获取 site-packages 路径，避免版本不一致
 
 # ========== 脚本逻辑（通常不需要修改）==========
 
@@ -59,9 +56,9 @@ for gpu_id in "${GPU_IDS[@]}"; do
         # CUDA_VISIBLE_DEVICES 控制该进程只看到指定的 GPU
         # --run_id 使用会话名，确保每个进程的输出目录不冲突
         # tee 同时输出到终端和日志文件
-        echo "[START] 启动 $session_name (GPU $gpu_id, num_envs=$NUM_ENVS)"
+        echo "[START] 启动 $session_name (GPU $gpu_id)"
         tmux new-session -d -s "$session_name" \
-            "bash --norc -c 'source $CONDA_SH && conda activate $CONDA_ENV && cd $SCRIPT_DIR && export LD_LIBRARY_PATH=$NVIDIA_LIB:\$LD_LIBRARY_PATH && CUDA_VISIBLE_DEVICES=$gpu_id python train_ppo.py --num_envs $NUM_ENVS --run_id $session_name $EXTRA_ARGS 2>&1 | tee $log_file'; exec bash"
+            "bash --norc -c 'source \"$CONDA_SH\" && conda activate \"$CONDA_ENV\" && cd \"$SCRIPT_DIR\" && SITE_PKG=\"\$(python -c \"import site; print(site.getsitepackages()[0])\")\" && NVIDIA_LIB=\"\$SITE_PKG/nvidia/cudnn/lib:\$SITE_PKG/nvidia/cublas/lib:\$SITE_PKG/nvidia/cuda_runtime/lib:\$SITE_PKG/nvidia/nvjitlink/lib\" && export LD_LIBRARY_PATH=\"\$NVIDIA_LIB:\$LD_LIBRARY_PATH\" && CUDA_VISIBLE_DEVICES=$gpu_id python train_ppo.py --run_id $session_name $EXTRA_ARGS 2>&1 | tee \"$log_file\"'; exec bash"
     done
 done
 

@@ -27,7 +27,7 @@ httpcore>=1.0
 httpx>=0.27
 ImageIO>=2.30
 ipykernel>=6.0
-ipython>=9.0
+ipython
 ipywidgets>=8.0
 Jinja2>=3.1
 jsonschema>=4.20
