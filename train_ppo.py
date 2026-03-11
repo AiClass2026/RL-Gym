@@ -155,8 +155,8 @@ def evaluate(agent, frame_stack_size, step_idx=None, max_steps=None):
     step_count = 0
     while True:
         state = frame_stack.get_state()
-        # 贪心模式：直接使用策略均值作为动作（无探索噪声）
-        action, value, _, _ = agent.predict([state], greedy=True)
+        # 使用随机模式：从高斯分布中采样动作
+        action, value, _, _ = agent.predict([state], greedy=False)
         obs, reward, terminated, truncated, _ = test_env.step(action[0])
         total_reward += float(reward)
         done = terminated or truncated
